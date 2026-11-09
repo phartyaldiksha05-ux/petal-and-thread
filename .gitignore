@@ -1,0 +1,76 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies and build outputs
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment files and credentials (all directories)
+.env
+.env.*
+!.env.example
+server/.env
+server/.env.*
+!server/.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Firebase service account credentials
+serviceAccountKey.json
+*serviceAccountKey*.json
+server/config/serviceAccountKey.json
+**/serviceAccountKey*.json
+
+# Data migration backups
+*.bak
+server/data/*.bak
+*.backup
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Server uploads and runtime media
+server/uploads/*
+!server/uploads/.gitkeep
+uploads/*
+!uploads/.gitkeep
+
+# Local database cluster storage and runtime database
+server/data/pgdata/
+**/pgdata/
+server/data/pg.log
+server/data/store.json
+!server/data/store.seed.json
+*.sqlite
+*.sqlite3
+
+# Generic private keys, certificates, and credentials
+*.pem
+*.key
+*.cert
+*.pfx
+*.p12
+*credentials*.json
+client_secret*.json
+
+# Windows OS metadata and thumbnail caches
+Thumbs.db
+ehthumbs.db
+[Dd]esktop.ini

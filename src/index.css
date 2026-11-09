@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: #F7F0E9;
+    color: #48342D;
+    font-family: 'Poppins', sans-serif;
+  }
+
+  h1, h2, h3, h4, .font-serif {
+    font-family: 'Playfair Display', Georgia, serif;
+  }
+
+  .font-cormorant {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+}
+
+/* Custom delicate scrollbar */
+::-webkit-scrollbar {
+  width: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: #F7F0E9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D8B7B8;
+  border-radius: 9999px;
+  border: 2px solid #F7F0E9;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #B77B83;
+}
+
+/* Subtle floral watermark effect */
+.bg-botanical-pattern {
+  background-image: radial-gradient(rgba(183, 123, 131, 0.08) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+/* Glassmorphism tuned for warm ivory */
+.glass-nav {
+  background: rgba(247, 240, 233, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(233, 201, 200, 0.45);
+}
+
+.glass-card {
+  background: rgba(255, 252, 248, 0.88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(233, 201, 200, 0.4);
+}

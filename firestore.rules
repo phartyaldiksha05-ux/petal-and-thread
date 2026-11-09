@@ -1,0 +1,204 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // ONLY trusted Firebase custom claim 'admin: true' grants admin privileges
+    // Hardcoded email fallbacks are strictly prohibited
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.admin == true;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Helper: Validate Customer Enquiry creation
+    function isValidEnquiryCreate() {
+      let data = request.resource.data;
+      
+      // 1. Required keys presence
+      let hasRequiredKeys = data.keys().hasAll([
+        'customerId', 'sellerId', 'productId', 'productTitle', 'status', 'createdAt'
+      ]);
+      
+      // 2. Strict allowlist - unexpected fields are rejected
+      // Note: adminNotes is strictly prohibited from the enquiry document
+      let hasOnlyAllowedKeys = data.keys().hasOnly([
+        'customerId', 'sellerId', 'productId', 'productTitle', 'price',
+        'customerName', 'customerEmail', 'customerPhone', 
+        'creationType', 'colorPalette', 'deadline', 'details', 'customInstructions', 
+        'referenceImages', 'status', 'createdAt'
+      ]);
+      
+      // 3. Required fields type and length validation
+      let validRequiredFields = 
+        data.customerId == request.auth.uid
+        && data.sellerId is string && data.sellerId.size() > 0 && data.sellerId.size() <= 128
+        && data.productId is string && data.productId.size() > 0 && data.productId.size() <= 128
+        && data.productTitle is string && data.productTitle.size() > 0 && data.productTitle.size() <= 200
+        && data.status == 'new'
+        && data.createdAt is string && data.createdAt.size() > 0 && data.createdAt.size() <= 50;
+      
+      // 4. Optional fields validation when present
+      let validOptionalFields = 
+        (!('price' in data) || (data.price is number && data.price >= 0))
+        && (!('customerName' in data) || (data.customerName is string && data.customerName.size() <= 100))
+        && (!('customerEmail' in data) || (data.customerEmail is string && data.customerEmail.size() <= 150))
+        && (!('customerPhone' in data) || (data.customerPhone is string && data.customerPhone.size() <= 50))
+        && (!('creationType' in data) || (data.creationType is string && data.creationType.size() <= 100))
+        && (!('colorPalette' in data) || (data.colorPalette is string && data.colorPalette.size() <= 200))
+        && (!('deadline' in data) || (data.deadline is string && data.deadline.size() <= 100))
+        && (!('details' in data) || (data.details is string && data.details.size() <= 2000))
+        && (!('customInstructions' in data) || (data.customInstructions is string && data.customInstructions.size() <= 2000));
+
+      // 5. Reference images validation (count <= 5, each item must be a valid string <= 1000 chars)
+      let validReferenceImages = !('referenceImages' in data) || (
+        data.referenceImages is list
+        && data.referenceImages.size() <= 5
+        && (data.referenceImages.size() == 0 || (data.referenceImages[0] is string && data.referenceImages[0].size() <= 1000))
+        && (data.referenceImages.size() <= 1 || (data.referenceImages[1] is string && data.referenceImages[1].size() <= 1000))
+        && (data.referenceImages.size() <= 2 || (data.referenceImages[2] is string && data.referenceImages[2].size() <= 1000))
+        && (data.referenceImages.size() <= 3 || (data.referenceImages[3] is string && data.referenceImages[3].size() <= 1000))
+        && (data.referenceImages.size() <= 4 || (data.referenceImages[4] is string && data.referenceImages[4].size() <= 1000))
+      );
+
+      // 6. Seller existence and active status verification
+      let sellerValid = exists(/databases/$(database)/documents/seller_profiles/$(data.sellerId))
+        && get(/databases/$(database)/documents/seller_profiles/$(data.sellerId)).data.status == 'active';
+
+      // 7. Product existence, approved status, and seller ownership cross-check
+      let productValid = exists(/databases/$(database)/documents/products/$(data.productId))
+        && get(/databases/$(database)/documents/products/$(data.productId)).data.status == 'approved'
+        && get(/databases/$(database)/documents/products/$(data.productId)).data.sellerId == data.sellerId;
+
+      return hasRequiredKeys 
+        && hasOnlyAllowedKeys 
+        && validRequiredFields 
+        && validOptionalFields 
+        && validReferenceImages
+        && sellerValid 
+        && productValid;
+    }
+
+    // Users collection
+    match /users/{userId} {
+      allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
+      allow create: if isOwner(userId) && request.resource.data.role in ['customer', 'seller'];
+      allow update: if isAuthenticated() && (
+        (isOwner(userId) && !('role' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Seller profiles collection
+    match /seller_profiles/{sellerId} {
+      // Anyone can read active seller profiles; owner or admin can read regardless of status
+      allow read: if (resource != null && resource.data.status == 'active') || isOwner(sellerId) || isAdmin();
+      
+      // Open seller registration: seller creates own profile, strictly unverified and pending initially
+      allow create: if isOwner(sellerId) 
+                    && request.resource.data.sellerId == sellerId
+                    && request.resource.data.isVerified == false
+                    && request.resource.data.status == 'pending';
+      
+      // Seller can update bio, store name, phone, etc., but CANNOT modify isVerified or status
+      allow update: if isAuthenticated() && (
+        (isOwner(sellerId) 
+          && !('isVerified' in request.resource.data.diff(resource.data).affectedKeys())
+          && !('status' in request.resource.data.diff(resource.data).affectedKeys())) ||
+        isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Products collection
+    match /products/{productId} {
+      // Public visitors can only view approved products; creators view their own drafts/pending/rejected; admin views all
+      allow read: if (resource != null && resource.data.status == 'approved') 
+                  || (isAuthenticated() && ((resource != null && resource.data.sellerId == request.auth.uid) || isAdmin()));
+      
+      // Sellers can create drafts or submit for review (never self-approve)
+      allow create: if isAuthenticated() 
+                    && request.resource.data.sellerId == request.auth.uid
+                    && request.resource.data.status in ['draft', 'pending'];
+      
+      // Sellers can edit their own products into draft/pending; cannot change ownership or self-approve
+      // Only admins can approve, reject, or edit any product
+      allow update: if isAuthenticated() && (
+        (resource.data.sellerId == request.auth.uid 
+          && request.resource.data.sellerId == resource.data.sellerId
+          && request.resource.data.status in ['draft', 'pending']) ||
+        isAdmin()
+      );
+      
+      // Only the product owner or admin can delete
+      allow delete: if isAuthenticated() && (resource.data.sellerId == request.auth.uid || isAdmin());
+    }
+
+    // Categories collection (public read, admin write)
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Customer Enquiries collection (Public / Customer / Seller data)
+    // adminNotes is strictly forbidden here to protect administrative privacy
+    match /enquiries/{enquiryId} {
+      // Authenticated customer creates enquiry with comprehensive cross-document verification
+      allow create: if isAuthenticated() && isValidEnquiryCreate();
+      
+      // Enquiry can only be read by the customer who submitted it, the targeted seller, or admin
+      allow read: if isAuthenticated() && (
+        resource.data.customerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid ||
+        isAdmin()
+      );
+      
+      // Customers cannot alter an enquiry once submitted.
+      // Target seller can only update status, sellerNotes, and updatedAt timestamp.
+      // A seller must NEVER create, modify, or delete adminNotes.
+      // Customer details, product details, sellerId, and price are completely immutable.
+      allow update: if isAuthenticated() && (
+        (resource.data.sellerId == request.auth.uid 
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'sellerNotes', 'updatedAt'])
+          && request.resource.data.status in ['new', 'contacted', 'in_discussion', 'in_progress', 'completed', 'cancelled', 'archived']
+          && (!('sellerNotes' in request.resource.data) || (request.resource.data.sellerNotes is string && request.resource.data.sellerNotes.size() <= 2000))
+          && (!('updatedAt' in request.resource.data) || (request.resource.data.updatedAt is string && request.resource.data.updatedAt.size() <= 50))
+        ) ||
+        isAdmin()
+      );
+      
+      // Only admin can delete an enquiry
+      allow delete: if isAdmin();
+    }
+
+    // Dedicated Admin-Only Enquiry Notes (Completely isolated from customers and sellers)
+    match /admin_enquiry_notes/{enquiryId} {
+      // Only trusted administrators with admin custom claim have read or write access
+      allow read, write: if isAdmin();
+    }
+
+    // Fashion Portfolio & Art Gallery (public read, admin write)
+    match /fashion_portfolio/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /art_gallery/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Platform settings (public read, admin write)
+    match /settings/{id} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
