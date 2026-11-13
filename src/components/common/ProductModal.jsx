@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, MessageCircle, Sparkles, Feather, ShieldCheck, Ruler } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { brandConfig } from '../../config/brandConfig';
+import { formatPrice } from '../../utils/currency';
 
 export function ProductModal() {
   const { selectedProduct, setSelectedProduct, isInWishlist, toggleWishlist, openCustomOrderWithPrefill } = useWishlist();
@@ -28,7 +29,7 @@ export function ProductModal() {
 
   // Generate WhatsApp link
   const whatsappText = encodeURIComponent(
-    `Hello ${brandConfig.brand.creator.name.split(' ')[0]}! I would love to enquire about "${selectedProduct.name}" (${brandConfig.brand.currency}${selectedProduct.price}) from ${brandConfig.brand.name}.`
+    `Hello ${brandConfig.brand.creator.name.split(' ')[0]}! I would love to enquire about "${selectedProduct.name}" (${formatPrice(selectedProduct.price)}) from ${brandConfig.brand.name}.`
   );
   const whatsappUrl = `https://wa.me/${brandConfig.contact.whatsappNumber}?text=${whatsappText}`;
 
@@ -94,11 +95,11 @@ export function ProductModal() {
 
                 <div className="flex items-baseline gap-3 mb-4">
                   <span className="text-2xl font-serif text-rose-dark font-semibold">
-                    {brandConfig.brand.currency}{selectedProduct.price}
+                    {formatPrice(selectedProduct.price)}
                   </span>
                   {selectedProduct.originalPrice && (
                     <span className="text-sm text-brown-light line-through font-light">
-                      {brandConfig.brand.currency}{selectedProduct.originalPrice}
+                      {formatPrice(selectedProduct.originalPrice)}
                     </span>
                   )}
                   <span className="text-xs text-sage-dark bg-sage-light/60 px-2 py-0.5 rounded-full font-medium ml-auto">

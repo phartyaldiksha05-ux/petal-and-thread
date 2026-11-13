@@ -93,7 +93,7 @@ export function AdminLogin() {
                 <input
                   type="text"
                   required
-                  placeholder="admin or owner@petalandthread.com"
+                  placeholder="Enter username or email"
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
                   className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white border border-blush/60 text-sm text-brown-dark placeholder-brown-light/50 focus:outline-none focus:border-rose transition-colors"
@@ -146,15 +146,6 @@ export function AdminLogin() {
               )}
             </button>
           </form>
-
-          {/* Quick Setup Hint (Owner Initial Access) */}
-          <div className="pt-4 border-t border-blush/40 text-center">
-            <p className="text-[11px] text-brown-light font-light leading-relaxed">
-              Default owner credentials initialized: <br />
-              <strong className="text-brown-dark font-medium">Username:</strong> <code className="bg-ivory px-1.5 py-0.5 rounded text-rose">admin</code> &nbsp;•&nbsp; 
-              <strong className="text-brown-dark font-medium">Password:</strong> <code className="bg-ivory px-1.5 py-0.5 rounded text-rose">atelier2026!</code>
-            </p>
-          </div>
 
         </div>
       </div>

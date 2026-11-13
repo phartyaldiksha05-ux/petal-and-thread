@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Boxes, Search, AlertTriangle, Check, ArrowUpDown, Plus, Minus, Save } from 'lucide-react';
 import { api } from '../../services/api';
 import { useSiteData } from '../../context/SiteDataContext';
+import { formatPrice } from '../../utils/currency';
 
 export function InventoryManagement() {
   const { refreshData } = useSiteData();
@@ -235,7 +236,7 @@ export function InventoryManagement() {
                       </td>
 
                       <td className="py-3.5 px-4 font-semibold text-rose-dark whitespace-nowrap">
-                        ${p.price}
+                        {formatPrice(p.price)}
                       </td>
 
                       <td className="py-3.5 px-4 whitespace-nowrap">

@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Heart, Trash2, MessageCircle, ArrowRight, ShoppingBag } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { brandConfig } from '../../config/brandConfig';
+import { formatPrice } from '../../utils/currency';
 
 export function WishlistDrawer() {
   const { wishlist, isWishlistOpen, setIsWishlistOpen, removeFromWishlist, setSelectedProduct } = useWishlist();
@@ -10,7 +11,7 @@ export function WishlistDrawer() {
   const totalEstimate = wishlist.reduce((acc, item) => acc + (item.price || 0), 0);
 
   // WhatsApp enquiry for all wishlist items
-  const wishlistItemsText = wishlist.map((item, idx) => `${idx + 1}. ${item.name} ($${item.price})`).join('%0A');
+  const wishlistItemsText = wishlist.map((item, idx) => `${idx + 1}. ${encodeURIComponent(item.name)} (${encodeURIComponent(formatPrice(item.price))})`).join('%0A');
   const whatsappUrl = `https://wa.me/${brandConfig.contact.whatsappNumber}?text=Hi%20Amelia!%20I'm%20interested%20in%20these%20items%20from%20Petal%20%26%20Thread:%0A${wishlistItemsText}%0A%0ACould%20you%20let%20me%20know%20availability%20and%20crafting%20times?`;
 
   return (
@@ -114,7 +115,7 @@ export function WishlistDrawer() {
                             {item.name}
                           </h5>
                           <p className="text-sm font-serif font-semibold text-rose-dark mt-0.5">
-                            {brandConfig.brand.currency}{item.price}
+                            {formatPrice(item.price)}
                           </p>
                         </div>
                         <div className="flex items-center justify-between pt-1">
@@ -147,7 +148,7 @@ export function WishlistDrawer() {
                   <div className="flex justify-between items-baseline text-sm">
                     <span className="text-brown/80">Estimated Total:</span>
                     <span className="font-serif text-xl font-bold text-brown-dark">
-                      {brandConfig.brand.currency}{totalEstimate}
+                      {formatPrice(totalEstimate)}
                     </span>
                   </div>
                   <p className="text-[11px] text-brown-light leading-normal">

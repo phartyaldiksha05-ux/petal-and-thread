@@ -1,32 +1,49 @@
 /**
  * Petal & Thread - REST API Client
  */
+import { auth } from '../config/firebase.js';
 
 const API_BASE = '/api';
 
-function getAuthHeaders() {
-  const token = localStorage.getItem('petal_thread_admin_token');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {})
-  };
+/**
+ * Resolves the active authentication token.
+ * Prefers Firebase ID token if a Firebase user is active.
+ * If Firebase token retrieval fails for an active user, throws an error (never falls back to legacy admin token).
+ * Legacy token is only sent when no Firebase user is active.
+ */
+async function getAuthToken() {
+  if (auth && auth.currentUser) {
+    try {
+      return await auth.currentUser.getIdToken();
+    } catch (err) {
+      console.error('Failed to retrieve Firebase ID token for active user:', err);
+      throw new Error('Authentication token retrieval failed. Please sign in again.');
+    }
+  }
+
+  // Fall back to legacy admin token only when no Firebase user is active
+  return localStorage.getItem('petal_thread_admin_token') || null;
 }
 
 async function request(endpoint, options = {}) {
   const url = `${API_BASE}${endpoint}`;
-  const headers = options.isFormData
+  const { authToken, isFormData, ...fetchOptions } = options;
+  const token = authToken !== undefined ? authToken : await getAuthToken();
+  const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+
+  const headers = isFormData
     ? {
-        ...(localStorage.getItem('petal_thread_admin_token')
-          ? { Authorization: `Bearer ${localStorage.getItem('petal_thread_admin_token')}` }
-          : {})
+        ...authHeader,
+        ...fetchOptions.headers
       }
     : {
-        ...getAuthHeaders(),
-        ...options.headers
+        'Content-Type': 'application/json',
+        ...authHeader,
+        ...fetchOptions.headers
       };
 
   const config = {
-    ...options,
+    ...fetchOptions,
     headers
   };
 
@@ -51,10 +68,45 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ identifier, password })
       }),
-    me: () => request('/auth/me'),
+    me: (legacyTokenOverride) =>
+      request('/auth/me', legacyTokenOverride ? { authToken: legacyTokenOverride } : {}),
     logout: () =>
       request('/auth/logout', {
         method: 'POST'
+      })
+  },
+
+  sellers: {
+    register: (data) =>
+      request('/sellers/register', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      }),
+    getMyProfile: () => request('/sellers/me'),
+    updateMyProfile: (data) =>
+      request('/sellers/me', {
+        method: 'PUT',
+        body: JSON.stringify(data)
+      }),
+    getMyProducts: () => request('/sellers/my-products'),
+    getAll: (params = {}) => {
+      const q = new URLSearchParams(params).toString();
+      return request(`/sellers${q ? `?${q}` : ''}`);
+    },
+    getById: (id) => request(`/sellers/${id}`),
+    updateStatus: (id, status, notes = '') =>
+      request(`/sellers/${id}/status`, {
+        method: 'PUT',
+        body: JSON.stringify({ status, notes })
+      })
+  },
+
+  moderation: {
+    getPendingProducts: () => request('/moderation/products'),
+    updateProductApproval: (id, approvalStatus, moderationNotes = '') =>
+      request(`/moderation/products/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ approvalStatus, moderationNotes })
       })
   },
 

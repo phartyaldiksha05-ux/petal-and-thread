@@ -17,6 +17,65 @@ service cloud.firestore {
       return isAuthenticated() && request.auth.uid == userId;
     }
 
+    function isActiveSeller() {
+      return isAuthenticated()
+        && exists(/databases/$(database)/documents/seller_profiles/$(request.auth.uid))
+        && get(/databases/$(database)/documents/seller_profiles/$(request.auth.uid)).data.status == 'active';
+    }
+
+    // Helpers: Validate Seller Profile creation & owner updates
+    function isValidSellerTimeField(val) {
+      return (val is string && val.size() <= 50) || val is timestamp;
+    }
+
+    function isValidSellerEditableFields(data) {
+      return (!('storeName' in data) || (data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100))
+        && (!('slug' in data) || (data.slug is string && data.slug.size() <= 120 && data.slug.matches('^[a-z0-9-]*$')))
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 50))
+        && (!('bio' in data) || (data.bio is string && data.bio.size() <= 1000))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 100))
+        && (!('profileImage' in data) || (data.profileImage is string && data.profileImage.size() <= 1000 && !data.profileImage.matches('(?is)^\\s*data:.*')))
+        && (!('whatsappNumber' in data) || (data.whatsappNumber is string && data.whatsappNumber.size() <= 30))
+        && (!('showWhatsapp' in data) || data.showWhatsapp is bool)
+        && (!('updatedAt' in data) || isValidSellerTimeField(data.updatedAt));
+    }
+
+    function isValidSellerProfileCreate(sellerId) {
+      let data = request.resource.data;
+      let keys = data.keys();
+      return keys.hasAll(['sellerId', 'storeName', 'status', 'isVerified'])
+        && keys.hasOnly([
+          'id', 'sellerId', 'storeName', 'slug', 'email', 'phone', 'bio',
+          'category', 'profileImage', 'whatsappNumber', 'showWhatsapp',
+          'status', 'isVerified', 'appliedAt', 'createdAt', 'updatedAt'
+        ])
+        && data.sellerId == sellerId
+        && (!('id' in data) || data.id == sellerId)
+        && data.isVerified == false
+        && data.status == 'pending'
+        && data.storeName is string && data.storeName.size() >= 2 && data.storeName.size() <= 100
+        && (!('email' in data) || (data.email is string && data.email.size() <= 150))
+        && (!('appliedAt' in data) || isValidSellerTimeField(data.appliedAt))
+        && (!('createdAt' in data) || isValidSellerTimeField(data.createdAt))
+        && isValidSellerEditableFields(data);
+    }
+
+    function isValidSellerProfileUpdate(sellerId) {
+      let data = request.resource.data;
+      let prev = resource.data;
+      let affected = data.diff(prev).affectedKeys();
+      return data.sellerId == sellerId
+        && data.sellerId == prev.sellerId
+        && data.status == prev.status
+        && data.isVerified == prev.isVerified
+        && affected.hasOnly([
+          'storeName', 'slug', 'phone', 'bio', 'category',
+          'profileImage', 'whatsappNumber', 'showWhatsapp', 'updatedAt'
+        ])
+        && (!('storeName' in affected) || ('storeName' in data))
+        && isValidSellerEditableFields(data);
+    }
+
     // Helper: Validate Customer Enquiry creation
     function isValidEnquiryCreate() {
       let data = request.resource.data;
@@ -85,6 +144,95 @@ service cloud.firestore {
         && productValid;
     }
 
+    // Helper: Validate a single compact wishlist item map produced by WishlistContext
+    function isValidWishlistItemMap(item) {
+      let keys = item.keys();
+      let orig = item.get('originalPrice', null);
+      let badge = item.get('badge', '');
+      let desc = item.get('description', '');
+      let mat = item.get('materials', '');
+      let dim = item.get('dimensions', '');
+
+      return keys.hasAll([
+          'id', 'name', 'price', 'image', 'categoryName', 'addedAt'
+        ])
+        && keys.hasOnly([
+          'id', 'name', 'price', 'image', 'categoryName', 'addedAt',
+          'originalPrice', 'badge', 'description', 'materials', 'dimensions'
+        ])
+        && item.id is string
+        && item.id.size() >= 1 && item.id.size() <= 128
+        && !item.id.matches('(?s).*/.*')
+        && !(item.id in ['__proto__', 'constructor', 'prototype'])
+        && item.name is string && item.name.size() >= 1 && item.name.size() <= 200
+        && item.price is number && item.price >= 0
+        && item.image is string && item.image.size() <= 1000 && !item.image.matches('(?is)^\\s*data:.*')
+        && item.categoryName is string && item.categoryName.size() <= 100
+        && item.addedAt is string && item.addedAt.size() >= 1 && item.addedAt.size() <= 50
+        && (orig == null || (orig is number && orig >= 0))
+        && (badge is string && badge.size() <= 60)
+        && (desc is string && desc.size() <= 1000)
+        && (mat is string && mat.size() <= 300)
+        && (dim is string && dim.size() <= 150);
+    }
+
+    function isValidWishlistItem(item) {
+      return item is map && isValidWishlistItemMap(item);
+    }
+
+    function isValidWishlistTopLevel(data, maxItems) {
+      let keys = data.keys();
+      return keys.hasAll(['items', 'updatedAt'])
+        && keys.hasOnly(['items', 'updatedAt'])
+        && data.items is map
+        && data.items.size() <= maxItems
+        && data.updatedAt == request.time;
+    }
+
+    // Validate single-item map entry via List indexing on values() + Set key match (valid Rules v2)
+    function isValidSingleWishlistCreateItem(itemsMap) {
+      let item = itemsMap.values()[0];
+      return isValidWishlistItem(item)
+        && itemsMap.keys().hasOnly([item.id])
+        && (item.id in itemsMap)
+        && itemsMap[item.id] == item;
+    }
+
+    function isValidWishlistCreate() {
+      let data = request.resource.data;
+      return isValidWishlistTopLevel(data, 1)
+        && (data.items.size() == 0 || isValidSingleWishlistCreateItem(data.items));
+    }
+
+    function isValidWishlistChangedItems(nextItems, prevItems) {
+      let diff = nextItems.diff(prevItems);
+      let addedKeys = diff.addedKeys();
+      let changedKeys = diff.changedKeys();
+      let removedKeys = diff.removedKeys();
+      let addedOrChanged = addedKeys.union(changedKeys);
+
+      return (
+        addedOrChanged.size() == 1
+        && removedKeys.size() == 0
+      ) || (
+        addedKeys.size() == 0
+        && changedKeys.size() == 0
+        && removedKeys.size() == 1
+      );
+    }
+
+    function isValidWishlistUpdate() {
+      let data = request.resource.data;
+      let prev = resource.data;
+      let hasPrevItems = ('items' in prev) && (prev.items is map);
+      return isValidWishlistTopLevel(data, 100)
+        && data.diff(prev).affectedKeys().hasOnly(['items', 'updatedAt'])
+        && (
+          (hasPrevItems && isValidWishlistChangedItems(data.items, prev.items))
+          || (!hasPrevItems && data.items.size() <= 1 && (data.items.size() == 0 || isValidSingleWishlistCreateItem(data.items)))
+        );
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isAuthenticated() && (isOwner(userId) || isAdmin());
@@ -96,49 +244,54 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
-    // Seller profiles collection
+    // Seller profiles collection (strictly private PII; owner or admin read only)
     match /seller_profiles/{sellerId} {
-      // Anyone can read active seller profiles; owner or admin can read regardless of status
-      allow read: if (resource != null && resource.data.status == 'active') || isOwner(sellerId) || isAdmin();
+      // Only profile owner or admin may read directly (protects email, phone, whatsappNumber, adminNotes)
+      // Cross-document exists()/get() checks in Rules (e.g. isActiveSeller(), isValidEnquiryCreate()) bypass read rules
+      allow read: if isOwner(sellerId) || isAdmin();
       
-      // Open seller registration: seller creates own profile, strictly unverified and pending initially
-      allow create: if isOwner(sellerId) 
-                    && request.resource.data.sellerId == sellerId
-                    && request.resource.data.isVerified == false
-                    && request.resource.data.status == 'pending';
+      // Open seller registration: owner creates own pending/unverified profile with strict schema validation
+      allow create: if isAdmin() || (isOwner(sellerId) && isValidSellerProfileCreate(sellerId));
       
-      // Seller can update bio, store name, phone, etc., but CANNOT modify isVerified or status
-      allow update: if isAuthenticated() && (
-        (isOwner(sellerId) 
-          && !('isVerified' in request.resource.data.diff(resource.data).affectedKeys())
-          && !('status' in request.resource.data.diff(resource.data).affectedKeys())) ||
-        isAdmin()
-      );
+      // Seller can update allowed profile fields only; sellerId, status, isVerified, email, id, adminNotes remain immutable
+      allow update: if isAdmin() || (isOwner(sellerId) && resource != null && isValidSellerProfileUpdate(sellerId));
       allow delete: if isAdmin();
     }
 
     // Products collection
     match /products/{productId} {
-      // Public visitors can only view approved products; creators view their own drafts/pending/rejected; admin views all
-      allow read: if (resource != null && resource.data.status == 'approved') 
-                  || (isAuthenticated() && ((resource != null && resource.data.sellerId == request.auth.uid) || isAdmin()));
+      // Public visitors can only view approved products (under approvalStatus or legacy status schema);
+      // creators view their own drafts/pending/rejected; admin views all
+      allow read: if (resource != null && (resource.data.get('approvalStatus', null) == 'approved' || (!('approvalStatus' in resource.data) && resource.data.get('status', null) == 'approved')))
+                  || (isAuthenticated() && ((resource != null && resource.data.get('sellerId', null) == request.auth.uid) || isAdmin()));
       
-      // Sellers can create drafts or submit for review (never self-approve)
-      allow create: if isAuthenticated() 
-                    && request.resource.data.sellerId == request.auth.uid
-                    && request.resource.data.status in ['draft', 'pending'];
-      
-      // Sellers can edit their own products into draft/pending; cannot change ownership or self-approve
-      // Only admins can approve, reject, or edit any product
-      allow update: if isAuthenticated() && (
-        (resource.data.sellerId == request.auth.uid 
-          && request.resource.data.sellerId == resource.data.sellerId
-          && request.resource.data.status in ['draft', 'pending']) ||
-        isAdmin()
+      // Only active sellers can create drafts or submit for review (never self-approve, feature, or add moderation fields)
+      allow create: if isAdmin() || (
+        isActiveSeller()
+        && request.resource.data.sellerId == request.auth.uid
+        && request.resource.data.approvalStatus in ['draft', 'pending']
+        && (!('status' in request.resource.data) || request.resource.data.status in ['available', 'sold_out'])
+        && (!('isFeatured' in request.resource.data) || request.resource.data.isFeatured == false)
+        && !('moderationNotes' in request.resource.data)
+        && !('moderatedAt' in request.resource.data)
       );
       
-      // Only the product owner or admin can delete
-      allow delete: if isAuthenticated() && (resource.data.sellerId == request.auth.uid || isAdmin());
+      // Active sellers can edit their own products into draft/pending; cannot change ownership, self-approve, or alter moderation/featured fields
+      // Only admins can approve, reject, feature, or edit any product
+      allow update: if isAdmin() || (
+        isActiveSeller()
+        && resource != null
+        && resource.data.sellerId == request.auth.uid
+        && request.resource.data.sellerId == resource.data.sellerId
+        && request.resource.data.approvalStatus in ['draft', 'pending']
+        && (!('status' in request.resource.data) || request.resource.data.status in ['available', 'sold_out'])
+        && !('isFeatured' in request.resource.data.diff(resource.data).affectedKeys())
+        && !('moderationNotes' in request.resource.data.diff(resource.data).affectedKeys())
+        && !('moderatedAt' in request.resource.data.diff(resource.data).affectedKeys())
+      );
+      
+      // Only an active product owner or admin can delete
+      allow delete: if isAdmin() || (isActiveSeller() && resource != null && resource.data.sellerId == request.auth.uid);
     }
 
     // Categories collection (public read, admin write)
@@ -199,6 +352,23 @@ service cloud.firestore {
     match /settings/{id} {
       allow read: if true;
       allow write: if isAdmin();
+    }
+
+    // Assumed Data Model — Collection: wishlists / Document ID: {userId}
+    // Strictly private cross-browser customer wishlists (owner-only; no public, cross-user, or admin access)
+    // Fields:
+    //   - items: map (required; size <= 1 on create, size <= 100 on update with 1 add/modify or 1 removal per write)
+    //     Each entry maps productId -> compact item map:
+    //       required: id (string 1..128, no '/', not '__proto__'/'constructor'/'prototype', matches map key),
+    //                 name (string 1..200), price (number >= 0),
+    //                 image (string <= 1000, not data: URI), categoryName (string <= 100), addedAt (string 1..50)
+    //       optional: originalPrice (null or number >= 0), badge (string <= 60),
+    //                 description (string <= 1000), materials (string <= 300), dimensions (string <= 150)
+    //   - updatedAt: timestamp (required, must equal request.time)
+    match /wishlists/{userId} {
+      allow read, delete: if isOwner(userId);
+      allow create: if isOwner(userId) && isValidWishlistCreate();
+      allow update: if isOwner(userId) && isValidWishlistUpdate();
     }
   }
 }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ShoppingBag,
-  DollarSign,
+  IndianRupee,
   Package,
   MessageSquareQuote,
   AlertTriangle,
@@ -13,6 +13,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import { api } from '../../services/api';
+import { formatPrice } from '../../utils/currency';
 
 export function Overview() {
   const [loading, setLoading] = useState(true);
@@ -115,7 +116,7 @@ export function Overview() {
               Total Revenue
             </p>
             <h3 className="font-serif text-2xl sm:text-3xl text-brown-dark font-medium mt-1">
-              ${stats.totalRevenue.toLocaleString()}
+              {formatPrice(stats.totalRevenue)}
             </h3>
             <p className="text-[11px] text-sage-dark flex items-center gap-1 mt-1 font-medium">
               <TrendingUp className="w-3 h-3" />
@@ -123,7 +124,7 @@ export function Overview() {
             </p>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-blush-light text-rose flex items-center justify-center flex-shrink-0">
-            <DollarSign className="w-6 h-6" />
+            <IndianRupee className="w-6 h-6" />
           </div>
         </div>
 
@@ -248,7 +249,7 @@ export function Overview() {
                       <span className="text-brown/80">{order.customerName}</span>
                     </div>
                     <p className="text-brown-light text-[11px]">
-                      {order.products.length} {order.products.length === 1 ? 'item' : 'items'} • ${order.totalPrice}
+                      {order.products.length} {order.products.length === 1 ? 'item' : 'items'} • {formatPrice(order.totalPrice)}
                     </p>
                   </div>
 

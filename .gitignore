@@ -30,10 +30,12 @@ serviceAccountKey.json
 server/config/serviceAccountKey.json
 **/serviceAccountKey*.json
 
-# Data migration backups
+# Data migration and atomic save temp/backup files
 *.bak
 server/data/*.bak
 *.backup
+*.tmp
+server/data/*.tmp
 
 # Editor directories and files
 .vscode/*

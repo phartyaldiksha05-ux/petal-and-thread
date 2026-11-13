@@ -3,11 +3,13 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, MessageCircle, Send, Check } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { useSiteData } from '../../context/SiteDataContext';
+import { useAuth } from '../../context/AuthContext';
 import { brandConfig } from '../../config/brandConfig';
 
 export function CustomOrderModal() {
   const { isCustomOrderOpen, setIsCustomOrderOpen, customOrderPrefill, showToast } = useWishlist();
   const { submitCustomEnquiry } = useSiteData();
+  const { user } = useAuth();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -18,6 +20,13 @@ export function CustomOrderModal() {
   });
 
   const [submitted, setSubmitted] = useState(false);
+  const [savingBeforeWhatsApp, setSavingBeforeWhatsApp] = useState(false);
+
+  useEffect(() => {
+    if (user?.name && !formData.name) {
+      setFormData(prev => ({ ...prev, name: user.name }));
+    }
+  }, [user]);
 
   useEffect(() => {
     if (customOrderPrefill) {
@@ -52,6 +61,29 @@ export function CustomOrderModal() {
 
     const text = `Hi Amelia! I'd like to request a bespoke order from ${brandConfig.brand.name}:%0A%0A${nameStr}${catStr}${colorStr}${deadlineStr}${detailsStr}`;
     return `https://wa.me/${brandConfig.contact.whatsappNumber}?text=${text}`;
+  };
+
+  // Save website enquiry to backend FIRST before opening WhatsApp
+  const handleWhatsAppSubmit = async (e) => {
+    e.preventDefault();
+    setSavingBeforeWhatsApp(true);
+    try {
+      await submitCustomEnquiry({
+        customerName: formData.name || 'Boutique Visitor',
+        customerEmail: user?.email || '',
+        creationType: formData.category,
+        colorPalette: formData.colorPalette,
+        deadline: formData.deadline,
+        details: formData.details
+      });
+      showToast("Enquiry saved to Atelier! Opening WhatsApp atelier chat...");
+    } catch (err) {
+      console.warn('Enquiry save notice:', err.message);
+    } finally {
+      setSavingBeforeWhatsApp(false);
+      window.open(getWhatsAppMessage(), '_blank');
+      setIsCustomOrderOpen(false);
+    }
   };
 
   const handleFormSubmit = async (e) => {
@@ -201,15 +233,15 @@ export function CustomOrderModal() {
               </div>
 
               <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                <a
-                  href={getWhatsAppMessage()}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex-1 py-3 px-4 rounded-full bg-rose text-white hover:bg-rose-dark font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-delicate"
+                <button
+                  type="button"
+                  onClick={handleWhatsAppSubmit}
+                  disabled={savingBeforeWhatsApp}
+                  className="flex-1 py-3 px-4 rounded-full bg-rose text-white hover:bg-rose-dark font-medium text-xs sm:text-sm flex items-center justify-center gap-2 transition-all shadow-delicate disabled:opacity-70"
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>Send via WhatsApp</span>
-                </a>
+                  <span>{savingBeforeWhatsApp ? 'Saving & Opening...' : 'Send via WhatsApp'}</span>
+                </button>
 
                 <button
                   type="submit"

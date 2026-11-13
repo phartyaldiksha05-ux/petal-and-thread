@@ -14,8 +14,8 @@ export const brandConfig = {
     taglineShort: "Little things, made with a lot of love.",
     description: "A sanctuary of handcrafted crochet wonders, delicate botanical hair accessories, bespoke feminine tailoring, and romantic fashion artwork.",
     establishedYear: "2024",
-    currency: "$",
-    currencyCode: "USD",
+    currency: "₹",
+    currencyCode: "INR",
     creator: {
       name: "Amelia Thorne",
       role: "Founder, Artisan & Fashion Illustrator",

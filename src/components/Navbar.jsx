@@ -1,17 +1,30 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ShoppingBag, Menu, X, Heart, Sparkles, MessageCircle, Lock } from 'lucide-react';
+import { ShoppingBag, Menu, X, Heart, Sparkles, MessageCircle, Lock, User, LogOut, Store, Clock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { brandConfig } from '../config/brandConfig';
 import { useWishlist } from '../context/WishlistContext';
 import { useSiteData } from '../context/SiteDataContext';
+import { useAuth } from '../context/AuthContext';
+import { AuthModal } from './common/AuthModal';
 
 export function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const { wishlistCount, setIsWishlistOpen, setIsCustomOrderOpen } = useWishlist();
   const { settings } = useSiteData();
+  const {
+    user,
+    isSeller,
+    isActiveSeller,
+    isPendingSeller,
+    isLoggedIn,
+    isLoading,
+    logout
+  } = useAuth();
   const brandName = settings?.name || brandConfig.brand.name;
+  const accountLabel = user?.displayName || user?.name || user?.email || 'Member';
 
   useEffect(() => {
     const handleScroll = () => {
@@ -121,6 +134,71 @@ export function Navbar() {
                 )}
               </button>
 
+              {/* Seller Portal Status / Studio Link */}
+              {!isLoading && isLoggedIn && isActiveSeller && (
+                <Link
+                  to="/seller/dashboard"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-rose text-white text-xs font-medium shadow-xs hover:bg-rose-dark transition-all"
+                  title="Artisan Studio Dashboard"
+                >
+                  <Store className="w-3.5 h-3.5" />
+                  <span>Artisan Studio</span>
+                </Link>
+              )}
+
+              {!isLoading && isLoggedIn && isPendingSeller && (
+                <Link
+                  to="/seller/dashboard"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium hover:bg-amber-100/80 transition-colors shadow-xs"
+                  title="Your artisan application is pending curation approval"
+                >
+                  <Clock className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Pending Seller</span>
+                </Link>
+              )}
+
+              {!isLoading && isLoggedIn && isSeller && !isActiveSeller && !isPendingSeller && (
+                <Link
+                  to="/seller/dashboard"
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-ivory border border-blush text-brown-dark text-xs font-medium hover:bg-blush-light transition-colors shadow-xs"
+                  title="View Artisan Application Status"
+                >
+                  <Store className="w-3.5 h-3.5 text-rose" />
+                  <span>Seller Status</span>
+                </Link>
+              )}
+
+              {/* User Account / Loading / Sign In */}
+              {isLoading ? (
+                <div
+                  className="w-24 h-8 rounded-full bg-blush-light/60 border border-blush/40 animate-pulse"
+                  aria-label="Checking session"
+                />
+              ) : isLoggedIn ? (
+                <div className="inline-flex items-center gap-1.5 sm:gap-2 bg-cream border border-blush/60 px-2.5 sm:px-3 py-1.5 rounded-full text-xs text-brown-dark shadow-xs">
+                  <User className="w-3.5 h-3.5 text-rose flex-shrink-0" />
+                  <span className="font-medium max-w-[75px] sm:max-w-[115px] truncate" title={accountLabel}>
+                    {accountLabel}
+                  </span>
+                  <button
+                    onClick={logout}
+                    className="text-brown-light/80 hover:text-rose transition-colors pl-1 border-l border-blush/50"
+                    title="Sign Out"
+                    aria-label="Sign Out"
+                  >
+                    <LogOut className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setIsAuthModalOpen(true)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-cream border border-blush/80 text-brown-dark hover:text-rose hover:border-rose text-xs font-medium transition-colors shadow-xs"
+                >
+                  <User className="w-3.5 h-3.5 text-rose" />
+                  <span>Sign In / Join</span>
+                </button>
+              )}
+
               {/* Owner Portal Link */}
               <Link
                 to="/admin/login"
@@ -185,7 +263,81 @@ export function Navbar() {
                   ))}
                 </nav>
 
-                <div className="pt-2">
+                {/* Mobile Auth Actions */}
+                <div className="pt-2 space-y-2">
+                  {isLoading ? (
+                    <div className="w-full h-10 rounded-full bg-ivory border border-blush/50 animate-pulse" />
+                  ) : isLoggedIn ? (
+                    <div className="p-3 rounded-2xl bg-ivory border border-blush/60 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <User className="w-4 h-4 text-rose flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-brown-dark truncate">
+                              {accountLabel}
+                            </p>
+                            {user?.email && user.email !== accountLabel && (
+                              <p className="text-[10px] text-brown/60 truncate">{user.email}</p>
+                            )}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            logout();
+                            setMobileMenuOpen(false);
+                          }}
+                          className="text-xs text-rose hover:text-rose-dark font-medium flex-shrink-0"
+                        >
+                          Sign Out
+                        </button>
+                      </div>
+
+                      {isActiveSeller && (
+                        <Link
+                          to="/seller/dashboard"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="w-full py-2 px-3 rounded-xl bg-rose text-white text-xs font-medium flex items-center justify-center gap-2 shadow-xs hover:bg-rose-dark transition-colors"
+                        >
+                          <Store className="w-3.5 h-3.5" />
+                          <span>Enter Artisan Studio</span>
+                        </Link>
+                      )}
+
+                      {isPendingSeller && (
+                        <Link
+                          to="/seller/dashboard"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="w-full py-2 px-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs font-medium flex items-center justify-center gap-2 hover:bg-amber-100/70 transition-colors"
+                        >
+                          <Clock className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Application Pending Review</span>
+                        </Link>
+                      )}
+
+                      {isSeller && !isActiveSeller && !isPendingSeller && (
+                        <Link
+                          to="/seller/dashboard"
+                          onClick={() => setMobileMenuOpen(false)}
+                          className="w-full py-2 px-3 rounded-xl bg-cream border border-blush text-brown-dark text-xs font-medium flex items-center justify-center gap-2 hover:bg-blush-light transition-colors"
+                        >
+                          <Store className="w-3.5 h-3.5 text-rose" />
+                          <span>View Seller Application Status</span>
+                        </Link>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        setIsAuthModalOpen(true);
+                      }}
+                      className="w-full py-2.5 px-4 rounded-full bg-cream border border-blush/80 text-brown-dark text-xs font-medium flex items-center justify-center gap-2 shadow-xs"
+                    >
+                      <User className="w-3.5 h-3.5 text-rose" />
+                      <span>Sign In / Join Community</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setMobileMenuOpen(false);
@@ -218,6 +370,12 @@ export function Navbar() {
           </div>
         )}
       </AnimatePresence>
+
+      {/* Global Auth Modal */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+      />
     </>
   );
 }

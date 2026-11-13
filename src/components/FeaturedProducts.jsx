@@ -5,6 +5,7 @@ import { brandConfig } from '../config/brandConfig';
 import { useWishlist } from '../context/WishlistContext';
 import { useSiteData } from '../context/SiteDataContext';
 import { FloralAccent } from './common/FloralAccent';
+import { formatPrice } from '../utils/currency';
 
 export function FeaturedProducts({ selectedCategoryFilter, onClearFilter }) {
   const { isInWishlist, toggleWishlist, setSelectedProduct } = useWishlist();
@@ -77,7 +78,7 @@ export function FeaturedProducts({ selectedCategoryFilter, onClearFilter }) {
           <AnimatePresence>
             {filteredProducts.map((product) => {
               const inWishlist = isInWishlist(product.id);
-              const whatsappUrl = `https://wa.me/${brandConfig.contact.whatsappNumber}?text=Hi%20Amelia!%20I'm%20interested%20in%20the%20${encodeURIComponent(product.name)}%20($${product.price})%20from%20Petal%20%26%20Thread.`;
+              const whatsappUrl = `https://wa.me/${brandConfig.contact.whatsappNumber}?text=Hi%20Amelia!%20I'm%20interested%20in%20the%20${encodeURIComponent(product.name)}%20(${encodeURIComponent(formatPrice(product.price))})%20from%20Petal%20%26%20Thread.`;
 
               return (
                 <motion.div
@@ -153,11 +154,11 @@ export function FeaturedProducts({ selectedCategoryFilter, onClearFilter }) {
                     <div className="pt-4 mt-3 border-t border-blush/40 flex items-center justify-between">
                       <div className="flex items-baseline gap-2">
                         <span className="font-serif text-lg font-semibold text-brown-dark">
-                          {brandConfig.brand.currency}{product.price}
+                          {formatPrice(product.price)}
                         </span>
                         {product.originalPrice && (
                           <span className="text-xs text-brown-light line-through font-light">
-                            {brandConfig.brand.currency}{product.originalPrice}
+                            {formatPrice(product.originalPrice)}
                           </span>
                         )}
                       </div>

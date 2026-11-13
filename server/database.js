@@ -2,25 +2,15 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
+import './config/env.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DB_PATH = path.join(__dirname, 'data', 'store.json');
 
-// Default initial data seeds
+// Default initial data seeds (no hardcoded credentials; local admin is bootstrapped from env when empty)
 const initialSeeds = {
-  admins: [
-    {
-      id: "admin-1",
-      username: "admin",
-      email: "owner@petalandthread.com",
-      // Default password: 'atelier2026!'
-      passwordHash: bcrypt.hashSync('atelier2026!', 10),
-      name: "Amelia Thorne",
-      role: "admin",
-      createdAt: new Date().toISOString()
-    }
-  ],
+  admins: [],
 
   websiteSettings: {
     brandName: "Petal & Thread",
@@ -505,6 +495,57 @@ const initialSeeds = {
   ]
 };
 
+const BOOTSTRAP_PASSWORD_PLACEHOLDERS = new Set([
+  'replace_with_strong_local_password',
+  'your_admin_password',
+  'changeme',
+  'password',
+  'admin'
+]);
+
+function ensureBootstrapAdmin(data) {
+  if (!Array.isArray(data.admins)) {
+    data.admins = [];
+  }
+
+  // Preserve any existing local admin accounts without overwriting
+  if (data.admins.length > 0) {
+    return false;
+  }
+
+  const email = (process.env.ADMIN_BOOTSTRAP_EMAIL || '').trim();
+  const rawUsername = (process.env.ADMIN_BOOTSTRAP_USERNAME || '').trim();
+  const password = typeof process.env.ADMIN_BOOTSTRAP_PASSWORD === 'string'
+    ? process.env.ADMIN_BOOTSTRAP_PASSWORD
+    : '';
+  const name = (process.env.ADMIN_BOOTSTRAP_NAME || 'Atelier Administrator').trim();
+
+  if (!email && !rawUsername && !password) {
+    return false;
+  }
+
+  const identifier = rawUsername || (email.includes('@') ? email.split('@')[0] : email);
+  if (!identifier || !password || password.length < 8 || BOOTSTRAP_PASSWORD_PLACEHOLDERS.has(password.trim())) {
+    console.warn(
+      '⚠ Skipping local admin bootstrap: provide a valid ADMIN_BOOTSTRAP_EMAIL (or ADMIN_BOOTSTRAP_USERNAME) and a non-placeholder ADMIN_BOOTSTRAP_PASSWORD of at least 8 characters.'
+    );
+    return false;
+  }
+
+  data.admins.push({
+    id: `admin-${Date.now()}`,
+    username: identifier,
+    email,
+    passwordHash: bcrypt.hashSync(password, 10),
+    name,
+    role: 'admin',
+    createdAt: new Date().toISOString()
+  });
+
+  console.info('✔ Bootstrapped initial local admin account from environment variables.');
+  return true;
+}
+
 // Ensure directory and load DB
 function ensureDb() {
   const dir = path.dirname(DB_PATH);
@@ -512,19 +553,30 @@ function ensureDb() {
     fs.mkdirSync(dir, { recursive: true });
   }
 
+  let data;
   if (!fs.existsSync(DB_PATH)) {
-    fs.writeFileSync(DB_PATH, JSON.stringify(initialSeeds, null, 2), 'utf-8');
-    return initialSeeds;
+    data = structuredClone(initialSeeds);
+    ensureBootstrapAdmin(data);
+    saveDb(data);
+    return data;
   }
 
   try {
     const raw = fs.readFileSync(DB_PATH, 'utf-8');
-    return JSON.parse(raw);
+    data = JSON.parse(raw);
   } catch (err) {
-    console.error('Error reading database file, restoring backup seeds:', err);
-    fs.writeFileSync(DB_PATH, JSON.stringify(initialSeeds, null, 2), 'utf-8');
-    return initialSeeds;
+    console.error('Error reading database file, restoring clean seeds:', err);
+    data = structuredClone(initialSeeds);
+    ensureBootstrapAdmin(data);
+    saveDb(data);
+    return data;
   }
+
+  if (ensureBootstrapAdmin(data)) {
+    saveDb(data);
+  }
+
+  return data;
 }
 
 // Atomic save

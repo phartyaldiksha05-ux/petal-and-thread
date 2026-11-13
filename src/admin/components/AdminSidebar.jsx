@@ -13,6 +13,7 @@ import {
   ExternalLink,
   LogOut,
   Sparkles,
+  Store,
   X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +25,8 @@ export function AdminSidebar({ mobileOpen, onCloseMobile }) {
 
   const navItems = [
     { name: 'Overview', to: '/admin/overview', icon: LayoutDashboard },
-    { name: 'Products', to: '/admin/products', icon: ShoppingBag },
+    { name: 'Products & Curation', to: '/admin/products', icon: ShoppingBag },
+    { name: 'Artisan Partners', to: '/admin/sellers', icon: Store },
     { name: 'Categories', to: '/admin/categories', icon: Grid },
     { name: 'Fashion Portfolio', to: '/admin/fashion', icon: Scissors },
     { name: 'Art Gallery', to: '/admin/art-gallery', icon: Palette },

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Package, Search, Filter, Check, Clock, Eye, AlertCircle, X, Truck, CheckCircle2 } from 'lucide-react';
 import { api } from '../../services/api';
+import { formatPrice } from '../../utils/currency';
 
 export function OrderManagement() {
   const [orders, setOrders] = useState([]);
@@ -176,7 +177,7 @@ export function OrderManagement() {
                       </div>
                     </td>
                     <td className="py-3.5 px-4 font-semibold text-rose-dark whitespace-nowrap">
-                      ${o.totalPrice}
+                      {formatPrice(o.totalPrice)}
                     </td>
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span
@@ -279,14 +280,14 @@ export function OrderManagement() {
                       )}
                     </div>
                     <span className="font-semibold text-rose-dark">
-                      ${(p.price || 0) * (p.quantity || 1)}
+                      {formatPrice((p.price || 0) * (p.quantity || 1))}
                     </span>
                   </div>
                 ))}
                 <div className="border-t border-blush/40 pt-2 flex justify-between items-baseline text-sm">
                   <span className="font-medium text-brown-dark">Total Order Value:</span>
                   <span className="font-serif font-bold text-lg text-brown-dark">
-                    ${selectedOrder.totalPrice}
+                    {formatPrice(selectedOrder.totalPrice)}
                   </span>
                 </div>
               </div>

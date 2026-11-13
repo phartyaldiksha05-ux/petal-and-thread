@@ -1,8 +1,8 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getDb, saveDb } from '../database.js';
-import { requireAdmin, JWT_SECRET } from '../middleware/auth.js';
+import { getDb } from '../database.js';
+import { requireAdmin, getJwtSecret } from '../middleware/auth.js';
 
 const router = express.Router();
 
@@ -14,11 +14,23 @@ router.post('/login', (req, res) => {
     return res.status(400).json({ error: 'Username/Email and password are required.' });
   }
 
+  let jwtSecret;
+  try {
+    jwtSecret = getJwtSecret();
+  } catch (err) {
+    console.error('Admin login blocked due to invalid JWT_SECRET configuration:', err.message);
+    return res.status(503).json({
+      error: 'Administrator login is unavailable: server JWT_SECRET is not configured securely.'
+    });
+  }
+
   const db = getDb();
   const cleanId = String(identifier).trim().toLowerCase();
 
-  const admin = db.admins.find(
-    a => a.username.toLowerCase() === cleanId || a.email.toLowerCase() === cleanId
+  const admin = (db.admins || []).find(
+    a =>
+      (a.username && a.username.toLowerCase() === cleanId) ||
+      (a.email && a.email.toLowerCase() === cleanId)
   );
 
   if (!admin) {
@@ -38,7 +50,7 @@ router.post('/login', (req, res) => {
       email: admin.email,
       role: admin.role
     },
-    JWT_SECRET,
+    jwtSecret,
     { expiresIn: '7d' }
   );
 

@@ -1,8 +1,8 @@
+import './config/env.js';
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
 
 import authRoutes from './routes/auth.js';
 import productRoutes from './routes/products.js';
@@ -13,8 +13,21 @@ import orderRoutes from './routes/orders.js';
 import enquiryRoutes from './routes/enquiries.js';
 import settingsRoutes from './routes/settings.js';
 import uploadRoutes from './routes/upload.js';
+import sellerRoutes from './routes/sellers.js';
+import moderationRoutes from './routes/moderation.js';
+import { validateJwtConfiguration } from './middleware/auth.js';
 
-dotenv.config();
+const jwtStatus = validateJwtConfiguration();
+if (!jwtStatus.valid) {
+  if (process.env.NODE_ENV === 'production') {
+    console.error(`❌ Fatal startup error: ${jwtStatus.error}`);
+    process.exit(1);
+  } else {
+    console.warn(`⚠ Warning: ${jwtStatus.error} Legacy admin JWT authentication will reject requests until configured.`);
+  }
+} else if (jwtStatus.usingLegacyExampleSecret) {
+  console.warn('⚠ Security Notice: JWT_SECRET matches the legacy example placeholder. Replace it with a strong random secret in server/.env or .env.');
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -41,6 +54,8 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/enquiries', enquiryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/sellers', sellerRoutes);
+app.use('/api/moderation', moderationRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -59,6 +74,10 @@ app.use((err, req, res, next) => {
   });
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, (err) => {
+  if (err) {
+    console.error(`❌ Failed to start Petal & Thread Backend API on port ${PORT}:`, err.message);
+    process.exit(1);
+  }
   console.log(`🌸 Petal & Thread Backend API running on http://localhost:${PORT}`);
 });

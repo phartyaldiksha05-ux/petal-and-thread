@@ -33,6 +33,11 @@ import { OrderManagement } from './admin/pages/OrderManagement';
 import { EnquiryManagement } from './admin/pages/EnquiryManagement';
 import { InventoryManagement } from './admin/pages/InventoryManagement';
 import { WebsiteSettings } from './admin/pages/WebsiteSettings';
+import { SellerManagement } from './admin/pages/SellerManagement';
+
+// Artisan / Seller Portal Components
+import { SellerDashboard } from './seller/pages/SellerDashboard';
+import { SellerProtectedRoute } from './seller/components/SellerProtectedRoute';
 
 // Public Customer Boutique View (Preserved completely)
 function PublicWebsite() {
@@ -120,6 +125,7 @@ export default function App() {
                 <Route index element={<Navigate to="/admin/overview" replace />} />
                 <Route path="overview" element={<Overview />} />
                 <Route path="products" element={<ProductManagement />} />
+                <Route path="sellers" element={<SellerManagement />} />
                 <Route path="categories" element={<CategoryManagement />} />
                 <Route path="fashion" element={<FashionManagement />} />
                 <Route path="art-gallery" element={<ArtGalleryManagement />} />
@@ -129,6 +135,17 @@ export default function App() {
                 <Route path="settings" element={<WebsiteSettings />} />
                 <Route path="*" element={<Navigate to="/admin/overview" replace />} />
               </Route>
+
+              {/* 4. Protected Artisan/Seller Studio */}
+              <Route
+                path="/seller/dashboard"
+                element={
+                  <SellerProtectedRoute>
+                    <SellerDashboard />
+                  </SellerProtectedRoute>
+                }
+              />
+              <Route path="/seller" element={<Navigate to="/seller/dashboard" replace />} />
 
               {/* Fallback to Public Storefront */}
               <Route path="*" element={<Navigate to="/" replace />} />

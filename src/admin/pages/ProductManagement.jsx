@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useSiteData } from '../../context/SiteDataContext';
+import { formatPrice } from '../../utils/currency';
 
 export function ProductManagement() {
   const { refreshData } = useSiteData();
@@ -32,6 +33,38 @@ export function ProductManagement() {
   const [uploadingImage, setUploadingImage] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [moderationFilter, setModerationFilter] = useState('all'); // 'all' | 'pending' | 'approved' | 'rejected'
+  const [moderationLoading, setModerationLoading] = useState(null);
+
+  const handleApproveProduct = async (id) => {
+    try {
+      setModerationLoading(id);
+      await api.moderation.updateProductApproval(id, 'approved');
+      setSuccessMsg('Product approved and published to public boutique.');
+      await loadProducts();
+      refreshData();
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to approve product.');
+    } finally {
+      setModerationLoading(null);
+    }
+  };
+
+  const handleRejectProduct = async (id) => {
+    try {
+      setModerationLoading(id);
+      await api.moderation.updateProductApproval(id, 'rejected');
+      setSuccessMsg('Product rejected.');
+      await loadProducts();
+      refreshData();
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err) {
+      setErrorMsg(err.message || 'Failed to reject product.');
+    } finally {
+      setModerationLoading(null);
+    }
+  };
 
   // Form State
   const initialForm = {
@@ -65,7 +98,7 @@ export function ProductManagement() {
     try {
       setLoading(true);
       const [prodsRes, catsRes] = await Promise.all([
-        api.products.getAll(),
+        api.products.getAll({ includePending: 'true' }),
         api.categories.getAll().catch(() => predefinedCategories)
       ]);
       setProducts(prodsRes || []);
@@ -230,11 +263,24 @@ export function ProductManagement() {
   };
 
   // Filtered products list
+  const pendingCount = products.filter(p => p.approvalStatus === 'pending').length;
+  const rejectedCount = products.filter(p => p.approvalStatus === 'rejected').length;
+
   const filteredProducts = products.filter(p => {
     const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) ||
-      (p.description && p.description.toLowerCase().includes(search.toLowerCase()));
+      (p.description && p.description.toLowerCase().includes(search.toLowerCase())) ||
+      (p.sellerStoreName && p.sellerStoreName.toLowerCase().includes(search.toLowerCase()));
     const matchCat = selectedCategory === 'all' || p.categorySlug === selectedCategory;
-    return matchSearch && matchCat;
+    const matchModeration =
+      moderationFilter === 'all'
+        ? true
+        : moderationFilter === 'pending'
+        ? p.approvalStatus === 'pending'
+        : moderationFilter === 'approved'
+        ? p.approvalStatus === 'approved' || !p.approvalStatus
+        : p.approvalStatus === 'rejected';
+
+    return matchSearch && matchCat && matchModeration;
   });
 
   return (
@@ -270,15 +316,71 @@ export function ProductManagement() {
 
       {/* Filter and Search Bar */}
       <div className="p-4 rounded-3xl bg-cream border border-blush/60 shadow-soft flex flex-col md:flex-row gap-4 items-center justify-between">
-        <div className="relative w-full md:w-80">
-          <Search className="w-4 h-4 absolute left-3.5 top-3 text-brown-light" />
-          <input
-            type="text"
-            placeholder="Search products by title or description..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full pl-10 pr-4 py-2 rounded-2xl bg-ivory border border-blush/60 text-xs text-brown-dark placeholder-brown-light/60 focus:outline-none focus:border-rose"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
+          <div className="relative w-full sm:w-72">
+            <Search className="w-4 h-4 absolute left-3.5 top-3 text-brown-light" />
+            <input
+              type="text"
+              placeholder="Search by title, description, or artisan..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-2 rounded-2xl bg-ivory border border-blush/60 text-xs text-brown-dark placeholder-brown-light/60 focus:outline-none focus:border-rose"
+            />
+          </div>
+
+          {/* Curation Moderation Filter */}
+          <div className="flex items-center gap-1.5 bg-ivory p-1 rounded-2xl border border-blush/60">
+            <button
+              onClick={() => setModerationFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                moderationFilter === 'all'
+                  ? 'bg-rose text-white shadow-xs'
+                  : 'text-brown hover:text-rose'
+              }`}
+            >
+              All ({products.length})
+            </button>
+            <button
+              onClick={() => setModerationFilter('pending')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex items-center gap-1 ${
+                moderationFilter === 'pending'
+                  ? 'bg-amber-600 text-white shadow-xs'
+                  : 'text-amber-800 hover:bg-amber-100/60'
+              }`}
+            >
+              <span>Pending</span>
+              {pendingCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-white/30 text-[10px] font-bold flex items-center justify-center">
+                  {pendingCount}
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setModerationFilter('approved')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors ${
+                moderationFilter === 'approved'
+                  ? 'bg-rose text-white shadow-xs'
+                  : 'text-brown hover:text-rose'
+              }`}
+            >
+              Approved
+            </button>
+            <button
+              onClick={() => setModerationFilter('rejected')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-colors flex items-center gap-1 ${
+                moderationFilter === 'rejected'
+                  ? 'bg-red-600 text-white shadow-xs'
+                  : 'text-red-700 hover:bg-red-50'
+              }`}
+            >
+              <span>Rejected</span>
+              {rejectedCount > 0 && (
+                <span className="w-4 h-4 rounded-full bg-white/30 text-[10px] font-bold flex items-center justify-center">
+                  {rejectedCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
@@ -290,7 +392,7 @@ export function ProductManagement() {
                 : 'bg-ivory border border-blush/60 text-brown hover:bg-blush-light'
             }`}
           >
-            All Categories ({products.length})
+            All Categories
           </button>
           {categories.map((cat) => (
             <button
@@ -335,6 +437,7 @@ export function ProductManagement() {
                   <th className="py-3.5 px-4">Category</th>
                   <th className="py-3.5 px-4">Price</th>
                   <th className="py-3.5 px-4">Stock</th>
+                  <th className="py-3.5 px-4">Curation</th>
                   <th className="py-3.5 px-4">Status</th>
                   <th className="py-3.5 px-4 text-center">Featured</th>
                   <th className="py-3.5 px-4 sm:px-6 text-right">Actions</th>
@@ -343,6 +446,9 @@ export function ProductManagement() {
               <tbody className="divide-y divide-blush/30">
                 {filteredProducts.map((p) => {
                   const mainImage = Array.isArray(p.images) && p.images[0] ? p.images[0] : p.image;
+                  const isPending = p.approvalStatus === 'pending';
+                  const isRejected = p.approvalStatus === 'rejected';
+
                   return (
                     <tr key={p.id} className="hover:bg-ivory/50 transition-colors">
                       <td className="py-3.5 px-4 sm:px-6 flex items-center gap-3">
@@ -353,6 +459,11 @@ export function ProductManagement() {
                         />
                         <div className="min-w-0">
                           <p className="font-medium text-sm text-brown-dark truncate">{p.name}</p>
+                          {p.sellerStoreName && (
+                            <p className="text-[10px] text-rose font-medium truncate">
+                              By {p.sellerStoreName}
+                            </p>
+                          )}
                           <p className="text-[11px] text-brown/60 truncate max-w-xs">{p.description}</p>
                         </div>
                       </td>
@@ -360,10 +471,10 @@ export function ProductManagement() {
                         {p.categoryName || p.categorySlug}
                       </td>
                       <td className="py-3.5 px-4 font-semibold text-rose-dark whitespace-nowrap">
-                        ${p.price}
+                        {formatPrice(p.price)}
                         {p.originalPrice && (
                           <span className="text-brown-light line-through font-normal text-[11px] ml-1.5">
-                            ${p.originalPrice}
+                            {formatPrice(p.originalPrice)}
                           </span>
                         )}
                       </td>
@@ -375,6 +486,48 @@ export function ProductManagement() {
                         >
                           {p.stock} in stock
                         </span>
+                      </td>
+                      <td className="py-3.5 px-4 whitespace-nowrap">
+                        {isPending ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-amber-50 text-amber-800 border border-amber-300">
+                              Pending
+                            </span>
+                            <button
+                              onClick={() => handleApproveProduct(p.id)}
+                              disabled={moderationLoading === p.id}
+                              className="p-1 rounded-md bg-emerald-100 text-emerald-800 hover:bg-emerald-200 transition-colors"
+                              title="Approve for public boutique"
+                            >
+                              <Check className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleRejectProduct(p.id)}
+                              disabled={moderationLoading === p.id}
+                              className="p-1 rounded-md bg-rose-100 text-rose-800 hover:bg-rose-200 transition-colors"
+                              title="Reject creation"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ) : isRejected ? (
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-rose-50 text-rose-800 border border-rose-300">
+                              Rejected
+                            </span>
+                            <button
+                              onClick={() => handleApproveProduct(p.id)}
+                              disabled={moderationLoading === p.id}
+                              className="text-[10px] text-emerald-700 hover:underline"
+                            >
+                              Re-approve
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase bg-sage-light text-sage-dark border border-sage/40">
+                            Approved
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <span
@@ -502,7 +655,7 @@ export function ProductManagement() {
               {/* Price, Original Price, Stock, Status */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block font-medium text-brown-dark mb-1">Price ($) *</label>
+                  <label className="block font-medium text-brown-dark mb-1">Price (₹) *</label>
                   <input
                     type="number"
                     step="0.01"
@@ -515,7 +668,7 @@ export function ProductManagement() {
                 </div>
 
                 <div>
-                  <label className="block font-medium text-brown-dark mb-1">Original ($)</label>
+                  <label className="block font-medium text-brown-dark mb-1">Original (₹)</label>
                   <input
                     type="number"
                     step="0.01"
